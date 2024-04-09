@@ -306,12 +306,20 @@ float arraySumVector(float* values, int N) {
   __cs149_mask maskAll = _cs149_init_ones();
   for (int i=0; i<N; i+=VECTOR_WIDTH) {
     _cs149_vload_float(temp, values+i, maskAll);
-    //_cs149_vadd_float(result, result, temp, maskAll);
-    _cs149_hadd_float(result, temp);
+    _cs149_vadd_float(result, result, temp, maskAll);
   }
-  float ans = 0.0f;
-  for(auto& f: result.value) ans+=f;
 
-  return ans;
+  // O(N/width + width)
+  // float ans = 0.0f;
+  // for(auto& f: result.value) ans+=f;
+  // return ans;
+
+  // //O(N/width + log width)
+  __cs149_vec_float ans;
+  for(int i = VECTOR_WIDTH; i > 1; i /=2){
+    _cs149_hadd_float(ans, result);
+    _cs149_interleave_float(result, ans);
+  }
+  return result.value[0];
 }
 
