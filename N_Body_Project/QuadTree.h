@@ -11,9 +11,9 @@ using namespace std;
 
 const double G = 6.674e-11;
 
-const float range = 1600.0, threshold = 0.5f;
+float range = 1600.0, threshold = 0.5f;
 
-int particleNum = 100, unitTime = 300, threadNum = 4;
+int particleNum = 100, unitTime = 100, threadNum = 4;
 
 class Point{
 public:
@@ -54,6 +54,7 @@ public:
     mutex m;
     vector<unique_ptr<Node>> children;
     shared_ptr<Particle> particle;
+    //int childid; //for debug use
     //vector<shared_ptr<Particle>> particles;
     // Node(){
     //     topLeft = Point(-1,-1);
@@ -98,11 +99,14 @@ public:
 	Timer(){
 		Begin = chrono::system_clock::now();
 	}
-	~Timer(){
-		End = chrono::system_clock::now();
-		RunTime = End - Begin;
-		cout << "Run Time is " << chrono::duration_cast<chrono::milliseconds>(RunTime).count() << "ms" << endl;
-	}
+	// ~Timer(){
+	// 	End = chrono::system_clock::now();
+	// 	RunTime = End - Begin;
+	// 	cout << "Run Time is " << chrono::duration_cast<chrono::milliseconds>(RunTime).count() << "ms" << endl;
+	// }
+    int64_t dur_ms(){
+        return chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - Begin).count();
+    }
 };
 
 

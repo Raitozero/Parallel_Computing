@@ -17,11 +17,12 @@ class Bitmap {
     }
 
     void setPixel(int x, int y, unsigned char r, unsigned char g, unsigned char b) {
+        int flippedY = height - 1 - y;
         if (x < 0 || x >= width || y < 0 || y >= height) {
             // Coordinate out of bounds
             return;
         }
-        int index = (x + y * width) * 3;
+        int index = (x + flippedY * width) * 3;
         image[index + 0] = b;
         image[index + 1] = g;
         image[index + 2] = r;
