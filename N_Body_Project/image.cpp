@@ -27,6 +27,15 @@ class Bitmap {
         image[index + 2] = r;
     }
 
+    void drawBigDot(int centerX, int centerY, int dotSize, unsigned char r, unsigned char g, unsigned char b) {
+    // Calculate half the size of the dot for offsetting the draw position
+    int halfSize = dotSize / 2;
+    for(int y = -halfSize; y <= halfSize; ++y) {
+        for(int x = -halfSize; x <= halfSize; ++x) {
+            setPixel(centerX + x, centerY + y, r, g, b);
+        }
+    }
+}
     void save(const string& filename) {
         ofstream file(filename, ios::out | ios::binary);
 

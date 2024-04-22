@@ -1,7 +1,6 @@
 #ifndef QUAD_TREE_H
 #define QUAD_TREE_H
 
-
 #include <iostream>
 #include <vector>
 #include <memory>
@@ -10,6 +9,11 @@
 
 using namespace std;
 
+const double G = 6.674e-11;
+
+const float range = 1600.0, threshold = 0.5f;
+
+int particleNum = 100, unitTime = 300, threadNum = 4;
 
 class Point{
 public:
@@ -27,6 +31,7 @@ public:
     float mass;
     Point position;
     Point velocity;
+    bool inRange = true;
     Particle(int idd, float mas, Point pos, Point vel): id(idd), mass(mas), position(pos), velocity(vel) {}
     Particle(const Particle& p): id(p.id), mass(p.mass), position(p.position), velocity(p.velocity){};
 };
@@ -48,8 +53,8 @@ public:
     int count;
     mutex m;
     vector<unique_ptr<Node>> children;
-    unique_ptr<Particle> particle;
-    //vector<unique_ptr<Particle>> particles;
+    shared_ptr<Particle> particle;
+    //vector<shared_ptr<Particle>> particles;
     // Node(){
     //     topLeft = Point(-1,-1);
     //     com = topLeft;
@@ -70,7 +75,7 @@ public:
         particle = nullptr;
         isLeaf = true;
     }
-    void add(const unique_ptr<Particle>& p);//update the mass, com of curr node when adding a new particle to this node or its children
+    void add(const shared_ptr<Particle>& p);//update the mass, com of curr node when adding a new particle to this node or its children
     void split();//initiate children
 };
 
@@ -81,8 +86,8 @@ public:
     QuadTree(Point topleft, float length){
         root = make_unique<Node>(topleft, length);
     }
-    void buildQuadTree_seq(vector<unique_ptr<Particle>>& particles);
-    void buildQuadTree_Parallel(vector<unique_ptr<Particle>>& particles, int start, int end);
+    void buildQuadTree_seq(vector<shared_ptr<Particle>>& particles);
+    void buildQuadTree_Parallel(vector<shared_ptr<Particle>>& particles, int start, int end);
 };
 
 class Timer{

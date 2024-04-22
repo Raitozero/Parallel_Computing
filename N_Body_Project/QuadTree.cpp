@@ -1,7 +1,7 @@
 #include "QuadTree.h"
 
 //add particle to this node or its children
-void Node::add(const unique_ptr<Particle>& p){
+void Node::add(const shared_ptr<Particle>& p){
     this->com = Point((this->com.x * this->mass + p->position.x * p->mass)/(this->mass + p->mass),
     (this->com.y * this->mass + p->position.y * p->mass)/(this->mass + p->mass));//update 'center of mass' according to definition
     this->mass += p->mass;
@@ -24,7 +24,7 @@ insert a new particle to quadtree
 if curr node is a leaf, then insert to 
 */
 
-int findSection(const unique_ptr<Node>& node, const unique_ptr<Particle>& p){
+int findSection(const unique_ptr<Node>& node, const shared_ptr<Particle>& p){
     auto [x0, y0] = node->topLeft;
     auto [x, y]= p->position;
     int ans = 0;
@@ -34,20 +34,21 @@ int findSection(const unique_ptr<Node>& node, const unique_ptr<Particle>& p){
 }
 
 
-void quadInsert(unique_ptr<Node>& node, unique_ptr<Particle>& p){
+void quadInsert(unique_ptr<Node>& node, shared_ptr<Particle>& p){
+    if(!p->inRange) return;
     node->add(p);
     //case1: leaf & occupied
     if(node->isLeaf){
         if(node->particle){ 
             //if this node has a particle, we need to split and store this particle and new particle to its children
-            unique_ptr<Particle> tmp = move(node->particle);
+            shared_ptr<Particle> tmp = node->particle;
             node->particle.reset();
             node->split();
             quadInsert(node->children[findSection(node, tmp)], tmp);
             quadInsert(node->children[findSection(node, p)], p);
         }
         else{ // leaf & vacant 
-            node->particle = std::move(p);
+            node->particle = p;
         }
     }
     else{
@@ -55,14 +56,15 @@ void quadInsert(unique_ptr<Node>& node, unique_ptr<Particle>& p){
     }
 }
 
-void quadInsert_parallel(unique_ptr<Node>& node, unique_ptr<Particle>& p){
+void quadInsert_parallel(unique_ptr<Node>& node, shared_ptr<Particle>& p){
+    if(!p->inRange) return;
     unique_lock<mutex> lck(node->m);
     node->add(p);
     //case1: leaf & occupied
     if(node->isLeaf){
         if(node->particle){
             //if this node has a particle, we need to split and store this particle and new particle to its children
-            unique_ptr<Particle> tmp = move(node->particle);
+            shared_ptr<Particle> tmp = node->particle;
             node->particle.reset();
             node->split();
             lck.unlock();
@@ -70,7 +72,7 @@ void quadInsert_parallel(unique_ptr<Node>& node, unique_ptr<Particle>& p){
             quadInsert_parallel(node->children[findSection(node, p)], p);
         }
         else{ // leaf & vacant 
-            node->particle = std::move(p);
+            node->particle = p;
         }
     }
     else{
@@ -85,12 +87,12 @@ void quadTreeTrim(unique_ptr<Node>& node){
     if(node->isLeaf && !node->particle) node.reset();
 }
 
-void QuadTree::buildQuadTree_seq(vector<unique_ptr<Particle>>& particles){
+void QuadTree::buildQuadTree_seq(vector<shared_ptr<Particle>>& particles){
     for(auto& p: particles) quadInsert(this->root, p);
     quadTreeTrim(this->root);
 }
 
-void QuadTree::buildQuadTree_Parallel(vector<unique_ptr<Particle>>& particles, int start, int end){
+void QuadTree::buildQuadTree_Parallel(vector<shared_ptr<Particle>>& particles, int start, int end){
     for(size_t i = start; i < end; i++) quadInsert_parallel(this->root, particles[i]);
     return;
 }

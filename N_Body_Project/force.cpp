@@ -1,10 +1,6 @@
 #include "QuadTree.h"
 #include <cmath>
 
-const double G = 6.674e-11;
-float threshold = 0.5f;
-int unitTime = 1000;
-
 class Force{
 public:
     float x, y;
@@ -20,7 +16,7 @@ public:
     }
 };
 
-float distance(unique_ptr<Particle>& particle, unique_ptr<Node>& node){
+float distance(const shared_ptr<Particle>& particle, const unique_ptr<Node>& node){
    return sqrt(pow((particle->position.x - node->com.x),2) + pow((particle->position.y - node->com.y),2));
 }
 
@@ -30,7 +26,7 @@ float distance(unique_ptr<Particle>& particle, unique_ptr<Node>& node){
 
 
 //calculate the gravity exerted by p2 on p1
-Force computeForceHelper(unique_ptr<Particle>& p1, unique_ptr<Particle>& p2){
+Force computeForceHelper(const shared_ptr<Particle>& p1, const shared_ptr<Particle>& p2){
     Force f;
     float dx = p2->position.x-p1->position.x, dy = p2->position.y-p1->position.y;
     float distSquared = dx * dx + dy * dy, dist = sqrt(distSquared);
@@ -42,7 +38,7 @@ Force computeForceHelper(unique_ptr<Particle>& p1, unique_ptr<Particle>& p2){
 }
 
 
-void computeForce(unique_ptr<Node>& node, unique_ptr<Particle>& particle, Force& force){
+void computeForce(const unique_ptr<Node>& node, const shared_ptr<Particle>& particle, Force& force){
     float s = node->length, d = distance(particle, node);
     //not far away: perform the process recursively on each of the root’s children
     if(s/d >= threshold){
@@ -56,27 +52,34 @@ void computeForce(unique_ptr<Node>& node, unique_ptr<Particle>& particle, Force&
     //else it's far away, we can ignore
 }
 
-unique_ptr<Particle> updateParticle(QuadTree& qt, unique_ptr<Particle>& particle){
-    unique_ptr<Particle> newParticle = make_unique<Particle>(*particle);
+shared_ptr<Particle> updateParticle(QuadTree& qt, const shared_ptr<Particle>& particle){
+    shared_ptr<Particle> newParticle = make_shared<Particle>(*particle);
     Force force;
     computeForce(qt.root, particle, force);
     float accX = force.x/particle->mass, accY = force.y/particle->mass;
     //s = vt+1/2*a*t^2
     newParticle->position.x = particle->position.x + particle->velocity.x * unitTime + 0.5 * accX * unitTime * unitTime;
     newParticle->position.y = particle->position.y + particle->velocity.y * unitTime + 0.5 * accY * unitTime * unitTime;
+    if(newParticle->position.x < 0 | newParticle->position.x > range | newParticle->position.y < 0 | newParticle->position.y > range) newParticle->inRange = false;
     // v' = v + a*t;
     newParticle->velocity.x = particle->velocity.x + accX * unitTime;
     newParticle->velocity.y = particle->velocity.y + accY * unitTime;
-    return move(newParticle);
+    return newParticle;
 }
 
-vector<unique_ptr<Particle>> update(QuadTree& qt, vector<unique_ptr<Particle>>& particles){
-    vector<unique_ptr<Particle>> ans(particles.size());
+vector<shared_ptr<Particle>> updateGenerateNew(QuadTree& qt, const vector<shared_ptr<Particle>>& particles){
+    vector<shared_ptr<Particle>> ans(particles.size());
     for(size_t i = 0; i < particles.size(); i++){
         ans[i] = updateParticle(qt, particles[i]);
     }
     return ans;
 }
 
-void computeForce_parallel(unique_ptr<Node>& node, vector<unique_ptr<Particle>>& particles){
+
+void updateGenerateNew_parallel(QuadTree& qt, const vector<shared_ptr<Particle>>& origin, vector<shared_ptr<Particle>>& ans, int start, int end){
+    for(size_t i = start; i < end; i++){
+        ans[i] = updateParticle(qt, origin[i]);
+    }
 }
+
+
