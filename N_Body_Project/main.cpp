@@ -2,9 +2,12 @@
 #include <thread>
 #include <cstring>
 
-#include "QuadTree.cpp"
-#include "image.cpp"
-#include "force.cpp"
+#include "Force.h"
+
+const double G = 6.674e-11;
+
+float range = 1600.0, threshold = 0.5f;
+int particleNum = 100000, unitTime = 100, threadNum = 4;
 
 //particle pos ranges from (0,0) to (.1* range, .9 * range) for simplicity. For now.
 vector<shared_ptr<Particle>> generateParticles(int num){
@@ -42,6 +45,8 @@ vector<shared_ptr<Particle>> generateParticles(int num){
 
 int main(int argc, char** argv){
 
+    //Command Flags
+    //"-r" change the image size, "-n" change the number of particles, "-t" change the unitTime
     for (int i = 1; i < argc; i++) {
         if (i < argc - 1) {
             if (strcmp(argv[i], "-r") == 0) range = stoi(argv[i + 1]);
@@ -50,77 +55,104 @@ int main(int argc, char** argv){
         }
     }
 
+    //Start the program
+    cout << "...............................Starting............................" << endl;
+    cout << "Particle Number: " << particleNum << "  " << "Iteration times: " << "10 " << "Time unit: " << unitTime << endl;
+
+    //generate particles
     vector<shared_ptr<Particle>> particles = generateParticles(particleNum);
+
+    //make duplicates to ensure the sequential and parallel approaches have the same results
     vector<shared_ptr<Particle>> duplicates;
     for(auto& p:particles) duplicates.push_back(make_shared<Particle>(*p));
+
+    //Sequential
     {
         cout << "---------------Sequential Simulation Starts---------------" << endl;
         Timer SeqTimer;
         for(size_t i = 0; i < 10; i++){
+            //1. build and trim the quadtree 
             Timer treeBuildTimer;
             Bitmap image(range, range);
             QuadTree qt1(Point(0, 0), range);
             qt1.buildQuadTree_seq(particles);
             int64_t treeBuildTime= treeBuildTimer.dur_ms();
-            for (const auto& particle : particles) {
-                if(particle->id == 1 || particle->id == 10) image.drawBigDot(particle->position.x, particle->position.y, 15, 255, 0, 0);
-                image.drawBigDot(particle->position.x, particle->position.y, 5, 255, 255, 255);
-                //image.setPixel(particle->position.x, particle->position.y, 255, 255, 255);
-            }
+
+            //2. calculate the gravity and simulate next postion of each particle
             Timer simulationTimer;
             vector<shared_ptr<Particle>> newParticles = updateGenerateNew(qt1, particles);
             int64_t simulationTime= simulationTimer.dur_ms();
-            string filename = "seq" + to_string(i) + ".bmp";
-            image.save(filename);
             particles = newParticles;
-            cout << "Iteration " << i  << ": " << endl;
+
+            //Mark out two particles to observe their movements
+            for (const auto& particle : particles) {
+                if(particle->id == 1 || particle->id == 10) image.drawBigDot(particle->position.x, particle->position.y, 15, 255, 0, 0);
+                //image.setPixel(particle->position.x, particle->position.y, 255, 255, 255);
+                image.drawBigDot(particle->position.x, particle->position.y, 5, 255, 255, 255);//make the dots bigger for observation
+            }
+
+            // Print image and information
+            string filename = "seq" + to_string(i+1) + ".bmp";
+            image.save(filename);
+            cout << "Iteration " << i+1  << ": " << endl;
             cout << "QuadTree Build Time: " << treeBuildTime << "ms, " << "Simulation Time: " <<  simulationTime << "ms." << endl;
         }
         cout << "Sequential Overall Time: " << SeqTimer.dur_ms() << "ms." << endl;
         cout << "---------------Sequential Simulation Ends---------------" << endl;
     }
+    //Parallel
     {
         cout << "---------------Parallel Simulation Starts---------------" << endl;
         Timer ParallelTimer;
-        vector<thread> threads(threadNum);
-        for(size_t i = 0; i < 10; i++){
+        vector<thread> threads(threadNum-1);
+        for(size_t j = 0; j < 10; j++){
             Timer treeBuildTimer;
             Bitmap image(range, range);
 
             //Tree Build
             QuadTree qt2(Point(0, 0), range);
-            for(size_t i = 1; i <= threadNum; i++){
+            for(size_t i = 1; i <= threadNum-1; i++){
                 threads[i-1] = thread(&QuadTree::buildQuadTree_Parallel, ref(qt2), ref(duplicates), (i-1)* particleNum/threadNum, i*particleNum/threadNum);
             }
+            qt2.buildQuadTree_Parallel(duplicates, 3*particleNum/threadNum, particleNum);
             for(auto& thread: threads) thread.join();
+            //qt2.buildQuadTree_Parallel(duplicates, 0, particleNum);
 
             //Tree Trim
-            for(size_t i = 0; i < threadNum; i++){
-                threads[i] = thread(quadTreeTrim, ref(qt2.root->children[i]));
+            if(!qt2.root->isLeaf){
+                for(size_t i = 0; i < threadNum-1; i++){
+                    threads[i] = thread(quadTreeTrim, ref(qt2.root->children[i]));
+                }
+                quadTreeTrim(qt2.root->children[3]);
+                for(auto& thread: threads) thread.join();
             }
-            for(auto& thread: threads) thread.join();
             int64_t treeBuildTime= treeBuildTimer.dur_ms();
+            
 
-            //Si
+            //Simulate
             Timer simulationTimer;
             vector<shared_ptr<Particle>> newParticles(particleNum);
-            for(size_t i = 1; i < threadNum+1; i++){
+            for(size_t i = 1; i <= threadNum-1; i++){
                 threads[i-1] =  thread(updateGenerateNew_parallel, ref(qt2), ref(duplicates), ref(newParticles), (i-1)* particleNum/threadNum, i * particleNum/threadNum);
             }
+            updateGenerateNew_parallel(qt2, duplicates, newParticles, 3 * particleNum/threadNum, particleNum);
             for(auto& thread: threads) thread.join();
+            //updateGenerateNew_parallel(qt2, duplicates, newParticles, 0, particleNum);
             int64_t simulationTime= simulationTimer.dur_ms();
-            for (const auto& particle : newParticles) {
+
+            duplicates = newParticles;
+            //write to image
+            for (const auto& particle : duplicates) {
                 if(particle->id == 1 || particle->id == 10) image.drawBigDot(particle->position.x, particle->position.y, 15, 255, 0, 0);
                 image.drawBigDot(particle->position.x, particle->position.y, 5, 255, 255, 255);
             }
-            string filename = "parallel" + to_string(i) + ".bmp";
+            string filename = "parallel" + to_string(j+1) + ".bmp";
             image.save(filename);
-            duplicates = newParticles;
-            cout << "Iteration " << i  << ": " << endl;
+            cout << "Iteration " << j+1  << ": " << endl;
             cout << "QuadTree Build Time: " << treeBuildTime << "ms, " << "Simulation Time: " <<  simulationTime << "ms." << endl;
         }
         cout << "Parallel Overall Time: " << ParallelTimer.dur_ms() << "ms." << endl;
-        cout << "---------------Parallel Simulation Starts---------------" << endl;
+        cout << "---------------Parallel Simulation Ends---------------" << endl;
     }
     return 0;
 }

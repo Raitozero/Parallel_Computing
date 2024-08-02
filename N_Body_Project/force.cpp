@@ -1,20 +1,5 @@
-#include "QuadTree.h"
+#include "Force.h"
 #include <cmath>
-
-class Force{
-public:
-    float x, y;
-    Force(){x=0; y =0;}
-    Force(float xx, float yy){x=xx; y=yy;}
-    Force operator+(const Force& ff){
-        return Force(x+ff.x, y+ff.y);
-    }
-    Force& operator+=(const Force& ff) {
-        x += ff.x;
-        y += ff.y;
-        return *this;
-    }
-};
 
 float distance(const shared_ptr<Particle>& particle, const unique_ptr<Node>& node){
    return sqrt(pow((particle->position.x - node->com.x),2) + pow((particle->position.y - node->com.y),2));
@@ -37,6 +22,16 @@ Force computeForceHelper(const shared_ptr<Particle>& p1, const shared_ptr<Partic
     return f;
 }
 
+Force computeForceFaraway(const shared_ptr<Particle>& p1, const unique_ptr<Node>& node){
+    Force f;
+    float dx = node->com.x-p1->position.x, dy = node->com.y-p1->position.y;
+    float distSquared = dx * dx + dy * dy, dist = sqrt(distSquared);
+    if(!distSquared) return f;
+    float gravity = G * p1->mass * node->mass / distSquared;
+    f.x = gravity * dx/dist;
+    f.y = gravity * dy/dist;
+    return f;
+}
 
 void computeForce(const unique_ptr<Node>& node, const shared_ptr<Particle>& particle, Force& force){
     float s = node->length, d = distance(particle, node);
@@ -49,10 +44,10 @@ void computeForce(const unique_ptr<Node>& node, const shared_ptr<Particle>& part
             }
         }
     }
-    //else it's far away, we can ignore
+    else force += computeForceFaraway(particle, node);
 }
 
-shared_ptr<Particle> updateParticle(QuadTree& qt, const shared_ptr<Particle>& particle){
+shared_ptr<Particle> updateParticle(const QuadTree& qt, const shared_ptr<Particle>& particle){
     shared_ptr<Particle> newParticle = make_shared<Particle>(*particle);
     Force force;
     computeForce(qt.root, particle, force);
@@ -65,9 +60,9 @@ shared_ptr<Particle> updateParticle(QuadTree& qt, const shared_ptr<Particle>& pa
     newParticle->velocity.x = particle->velocity.x + accX * unitTime;
     newParticle->velocity.y = particle->velocity.y + accY * unitTime;
     return newParticle;
-}
+} 
 
-vector<shared_ptr<Particle>> updateGenerateNew(QuadTree& qt, const vector<shared_ptr<Particle>>& particles){
+vector<shared_ptr<Particle>> updateGenerateNew(const QuadTree& qt, const vector<shared_ptr<Particle>>& particles){
     vector<shared_ptr<Particle>> ans(particles.size());
     for(size_t i = 0; i < particles.size(); i++){
         ans[i] = updateParticle(qt, particles[i]);
@@ -76,7 +71,7 @@ vector<shared_ptr<Particle>> updateGenerateNew(QuadTree& qt, const vector<shared
 }
 
 
-void updateGenerateNew_parallel(QuadTree& qt, const vector<shared_ptr<Particle>>& origin, vector<shared_ptr<Particle>>& ans, int start, int end){
+void updateGenerateNew_parallel(const QuadTree& qt, const vector<shared_ptr<Particle>>& origin, vector<shared_ptr<Particle>>& ans, int start, int end){
     for(size_t i = start; i < end; i++){
         ans[i] = updateParticle(qt, origin[i]);
     }
