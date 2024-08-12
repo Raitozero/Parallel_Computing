@@ -1,7 +1,7 @@
 #include <random>
 #include <thread>
 #include <cstring>
-
+#include <omp.h>
 #include "Force.h"
 
 const double G = 6.674e-11;
@@ -100,59 +100,106 @@ int main(int argc, char** argv){
         cout << "Sequential Overall Time: " << SeqTimer.dur_ms() << "ms." << endl;
         cout << "---------------Sequential Simulation Ends---------------" << endl;
     }
-    //Parallel
+    // //Parallel
+    // {
+    //     cout << "---------------Parallel Simulation Starts---------------" << endl;
+    //     Timer ParallelTimer;
+    //     vector<thread> threads(threadNum-1);
+    //     for(size_t j = 0; j < 10; j++){
+    //         Timer treeBuildTimer;
+    //         Bitmap image(range, range);
+
+    //         //Tree Build
+    //         QuadTree qt2(Point(0, 0), range);
+    //         for(size_t i = 1; i <= threadNum-1; i++){
+    //             threads[i-1] = thread(&QuadTree::buildQuadTree_Parallel, ref(qt2), ref(duplicates), (i-1)* particleNum/threadNum, i*particleNum/threadNum);
+    //         }
+    //         qt2.buildQuadTree_Parallel(duplicates, 3*particleNum/threadNum, particleNum);
+    //         for(auto& thread: threads) thread.join();
+    //         //qt2.buildQuadTree_Parallel(duplicates, 0, particleNum);
+
+    //         //Tree Trim
+    //         if(!qt2.root->isLeaf){
+    //             for(size_t i = 0; i < threadNum-1; i++){
+    //                 threads[i] = thread(quadTreeTrim, ref(qt2.root->children[i]));
+    //             }
+    //             quadTreeTrim(qt2.root->children[3]);
+    //             for(auto& thread: threads) thread.join();
+    //         }
+    //         int64_t treeBuildTime= treeBuildTimer.dur_ms();
+            
+
+    //         //Simulate
+    //         Timer simulationTimer;
+    //         vector<shared_ptr<Particle>> newParticles(particleNum);
+    //         for(size_t i = 1; i <= threadNum-1; i++){
+    //             threads[i-1] =  thread(updateGenerateNew_parallel, ref(qt2), ref(duplicates), ref(newParticles), (i-1)* particleNum/threadNum, i * particleNum/threadNum);
+    //         }
+    //         updateGenerateNew_parallel(qt2, duplicates, newParticles, 3 * particleNum/threadNum, particleNum);
+    //         for(auto& thread: threads) thread.join();
+    //         //updateGenerateNew_parallel(qt2, duplicates, newParticles, 0, particleNum);
+    //         int64_t simulationTime= simulationTimer.dur_ms();
+
+    //         duplicates = newParticles;
+    //         //write to image
+    //         for (const auto& particle : duplicates) {
+    //             if(particle->id == 1 || particle->id == 10) image.drawBigDot(particle->position.x, particle->position.y, 15, 255, 0, 0);
+    //             image.drawBigDot(particle->position.x, particle->position.y, 5, 255, 255, 255);
+    //         }
+    //         string filename = "parallel" + to_string(j+1) + ".bmp";
+    //         image.save(filename);
+    //         cout << "Iteration " << j+1  << ": " << endl;
+    //         cout << "QuadTree Build Time: " << treeBuildTime << "ms, " << "Simulation Time: " <<  simulationTime << "ms." << endl;
+    //     }
+    //     cout << "Parallel Overall Time: " << ParallelTimer.dur_ms() << "ms." << endl;
+    //     cout << "---------------Parallel Simulation Ends---------------" << endl;
+    // }
+        // OpenMP
     {
-        cout << "---------------Parallel Simulation Starts---------------" << endl;
+        cout << "---------------OpenMP Version---------------" << endl;
         Timer ParallelTimer;
-        vector<thread> threads(threadNum-1);
-        for(size_t j = 0; j < 10; j++){
+        omp_set_num_threads(threadNum); // Set the number of threads to use with OpenMP
+
+        for (size_t j = 0; j < 10; j++) {
             Timer treeBuildTimer;
             Bitmap image(range, range);
 
-            //Tree Build
+            // Tree Build
             QuadTree qt2(Point(0, 0), range);
-            for(size_t i = 1; i <= threadNum-1; i++){
-                threads[i-1] = thread(&QuadTree::buildQuadTree_Parallel, ref(qt2), ref(duplicates), (i-1)* particleNum/threadNum, i*particleNum/threadNum);
-            }
-            qt2.buildQuadTree_Parallel(duplicates, 3*particleNum/threadNum, particleNum);
-            for(auto& thread: threads) thread.join();
-            //qt2.buildQuadTree_Parallel(duplicates, 0, particleNum);
-
-            //Tree Trim
-            if(!qt2.root->isLeaf){
-                for(size_t i = 0; i < threadNum-1; i++){
-                    threads[i] = thread(quadTreeTrim, ref(qt2.root->children[i]));
-                }
-                quadTreeTrim(qt2.root->children[3]);
-                for(auto& thread: threads) thread.join();
-            }
-            int64_t treeBuildTime= treeBuildTimer.dur_ms();
             
+            #pragma omp parallel for
+            for (size_t i = 0; i < threadNum; i++) qt2.buildQuadTree_Parallel(duplicates, i * particleNum / threadNum, (i + 1) * particleNum / threadNum);
 
-            //Simulate
+            // Tree Trim
+            if (!qt2.root->isLeaf) {
+                #pragma omp parallel for
+                for (size_t i = 0; i < threadNum; i++) quadTreeTrim(qt2.root->children[i]);
+            }
+            int64_t treeBuildTime = treeBuildTimer.dur_ms();
+
+            // Simulate
             Timer simulationTimer;
             vector<shared_ptr<Particle>> newParticles(particleNum);
-            for(size_t i = 1; i <= threadNum-1; i++){
-                threads[i-1] =  thread(updateGenerateNew_parallel, ref(qt2), ref(duplicates), ref(newParticles), (i-1)* particleNum/threadNum, i * particleNum/threadNum);
+            
+            #pragma omp parallel for
+            for (size_t i = 0; i < threadNum; i++) {
+                updateGenerateNew_parallel(qt2, duplicates, newParticles, i * particleNum / threadNum, (i + 1) * particleNum / threadNum);
             }
-            updateGenerateNew_parallel(qt2, duplicates, newParticles, 3 * particleNum/threadNum, particleNum);
-            for(auto& thread: threads) thread.join();
-            //updateGenerateNew_parallel(qt2, duplicates, newParticles, 0, particleNum);
             int64_t simulationTime= simulationTimer.dur_ms();
-
             duplicates = newParticles;
-            //write to image
+
+            // Write to image
             for (const auto& particle : duplicates) {
-                if(particle->id == 1 || particle->id == 10) image.drawBigDot(particle->position.x, particle->position.y, 15, 255, 0, 0);
+                if (particle->id == 1 || particle->id == 10) image.drawBigDot(particle->position.x, particle->position.y, 15, 255, 0, 0);
                 image.drawBigDot(particle->position.x, particle->position.y, 5, 255, 255, 255);
             }
-            string filename = "parallel" + to_string(j+1) + ".bmp";
+            string filename = "OpenMP" + to_string(j + 1) + ".bmp";
             image.save(filename);
-            cout << "Iteration " << j+1  << ": " << endl;
-            cout << "QuadTree Build Time: " << treeBuildTime << "ms, " << "Simulation Time: " <<  simulationTime << "ms." << endl;
+            cout << "Iteration " << j + 1 << ": " << endl;
+            cout << "QuadTree Build Time: " << treeBuildTime << "ms, " << "Simulation Time: " << simulationTime << "ms." << endl;
         }
         cout << "Parallel Overall Time: " << ParallelTimer.dur_ms() << "ms." << endl;
-        cout << "---------------Parallel Simulation Ends---------------" << endl;
+        cout << "---------------OpenMP version Ends---------------" << endl;
     }
     return 0;
 }

@@ -1,16 +1,17 @@
-#Compiler
+# Compiler
 CC = g++
 
 TARGET = Nbody
-CFLAGS = -std=c++20 -c
+CFLAGS = -std=c++20 -c -fopenmp
+LDFLAGS = -std=c++20 -fopenmp
 OBJ = main.o Force.o QuadTree.o Image.o
 
 $(TARGET): $(OBJ)
-	$(CC) -std=c++20 -o $@ $^
+	$(CC) $(LDFLAGS) -o $(TARGET) $(OBJ)
 
 %.o : %.cpp
 	$(CC) $(CFLAGS) $< -o $@
 
-.PHONEY: clean
+.PHONY: clean
 clean:
 	rm -f *.o *.bmp $(TARGET)
