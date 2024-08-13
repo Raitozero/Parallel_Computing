@@ -65,6 +65,10 @@ int main(int argc, char** argv){
     //make duplicates to ensure the sequential and parallel approaches have the same results
     vector<shared_ptr<Particle>> duplicates;
     for(auto& p:particles) duplicates.push_back(make_shared<Particle>(*p));
+    vector<shared_ptr<Particle>> duplicates2;
+    for(auto& p:particles) duplicates2.push_back(make_shared<Particle>(*p));
+    vector<shared_ptr<Particle>> duplicates3;
+    for(auto& p:particles) duplicates3.push_back(make_shared<Particle>(*p));
 
     //Sequential
     {
@@ -167,7 +171,7 @@ int main(int argc, char** argv){
             // Tree Build
             QuadTree qt2(Point(0, 0), range);
             
-            #pragma omp parallel for
+            #pragma omp parallel for schedule(dynamic)
             for (size_t i = 0; i < threadNum; i++) qt2.buildQuadTree_Parallel(duplicates, i * particleNum / threadNum, (i + 1) * particleNum / threadNum);
 
             // Tree Trim
@@ -181,7 +185,7 @@ int main(int argc, char** argv){
             Timer simulationTimer;
             vector<shared_ptr<Particle>> newParticles(particleNum);
             
-            #pragma omp parallel for
+            #pragma omp parallel for schedule(dynamic)
             for (size_t i = 0; i < threadNum; i++) {
                 updateGenerateNew_parallel(qt2, duplicates, newParticles, i * particleNum / threadNum, (i + 1) * particleNum / threadNum);
             }
@@ -200,6 +204,23 @@ int main(int argc, char** argv){
         }
         cout << "Parallel Overall Time: " << ParallelTimer.dur_ms() << "ms." << endl;
         cout << "---------------OpenMP version Ends---------------" << endl;
+    }
+    {
+        cout << "---------------Test dynamic---------------" << endl;
+        omp_set_num_threads(threadNum); // Set the number of threads to use with OpenMP
+
+        QuadTree qt1(Point(0, 0), range);
+        QuadTree qt2(Point(0, 0), range);
+        Timer timer11;
+        #pragma omp parallel for schedule(dynamic)
+        for (size_t i = 0; i < threadNum; i++) qt1.buildQuadTree_Parallel(duplicates2, i * particleNum / threadNum, (i + 1) * particleNum / threadNum);
+        int64_t time11= timer11.dur_ms();
+        cout << "OpenMP dynamic treebuild: "<< time11 << " ms" << endl;
+        Timer timer22;
+        #pragma omp parallel for
+        for (size_t i = 0; i < threadNum; i++) qt2.buildQuadTree_Parallel(duplicates3, i * particleNum / threadNum, (i + 1) * particleNum / threadNum);
+        int64_t time22 = timer22.dur_ms();
+        cout << "OpenMP normal treebuild: "<< time22 << " ms" << endl;
     }
     return 0;
 }
